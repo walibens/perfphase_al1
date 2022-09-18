@@ -1,6 +1,13 @@
 REPORT yr_al1_wbs_gol.
 
+PARAMETERS :
+  p_gsize TYPE i,
+  p_iter  TYPE i.
+
 CLASS cx_gol_wrong_value DEFINITION INHERITING FROM cx_static_check FINAL.
+  PUBLIC SECTION.
+  PROTECTED SECTION.
+  PRIVATE SECTION.
 ENDCLASS.
 
 CLASS cx_gol_wrong_value IMPLEMENTATION.
@@ -74,41 +81,52 @@ CLASS lcl_grid DEFINITION FINAL.
         coordinate_y TYPE i,
         cell         TYPE REF TO lcl_cell,
       END OF ty_grid.
+
     DATA :
       mt_grid TYPE STANDARD TABLE OF ty_grid.
 
+    METHODS :
+      constructor IMPORTING iv_grid_size TYPE i,
+      get_nb_of_living_neighbors IMPORTING iv_coordinate_x  TYPE i
+                                           iv_coordinate_y  TYPE i
+                                 RETURNING VALUE(rv_return) TYPE i,
+      is_alive_and_less_2_neighbors IMPORTING iv_y             TYPE i
+                                              iv_x             TYPE i
+                                    RETURNING VALUE(rv_result) TYPE abap_bool,
+      is_alive_and_more_2_neighbors IMPORTING iv_y             TYPE i
+                                              iv_x             TYPE i
+                                    RETURNING VALUE(rv_result) TYPE abap_bool,
+      is_alive_and_2_or_3_neighbors IMPORTING iv_x             TYPE i
+                                              iv_y             TYPE i
+                                    RETURNING VALUE(rv_result) TYPE abap_bool,
+      is_dead_and_more_2_neighbors IMPORTING iv_x             TYPE i
+                                             iv_y             TYPE i
+                                   RETURNING VALUE(rv_result) TYPE abap_bool,
+      kill_cell                    IMPORTING iv_x TYPE i
+                                             iv_y TYPE i,
+      give_birth_cell IMPORTING iv_x TYPE i
+                                iv_y TYPE i.
+  PRIVATE SECTION.
+    DATA :
+          mv_grid_size TYPE i.
     METHODS:
-        constructor IMPORTING iv_grid_size TYPE i,
-        get_nb_of_living_neighbors IMPORTING iv_coordinate_x TYPE i
-                                             iv_coordinate_y TYPE i
-                                   RETURNING VALUE(rv_return) TYPE i,
-     is_alive_and_less_2_neighbors     IMPORTING iv_y TYPE i
-     iv_x TYPE i
-     RETURNING VALUE(rv_result) TYPE abap_bool,
-         is_alive_and_more_2_neighbors
-         IMPORTING iv_y TYPE i
-     iv_x TYPE i
-     RETURNING VALUE(rv_result) TYPE abap_bool,
-         is_alive_and_2_or_3_neighbors
-         IMPORTING iv_x TYPE i
-     iv_y TYPE i
-     RETURNING VALUE(rv_result) TYPE abap_bool,
-         is_dead_and_more_2_neighbors
-         IMPORTING iv_x TYPE i
-     iv_y TYPE i
-     RETURNING VALUE(rv_result) TYPE abap_bool.
+      initialize.
 ENDCLASS.
 
 CLASS lcl_grid IMPLEMENTATION.
-
   METHOD constructor.
+    mv_grid_size = iv_grid_size.
+    initialize( ).
+  ENDMETHOD.
+
+  METHOD initialize.
     DATA :
       lv_x TYPE i,
       lv_y TYPE i.
 
-    DO iv_grid_size TIMES.
+    DO mv_grid_size TIMES.
       lv_x += 1.
-      DO iv_grid_size TIMES.
+      DO mv_grid_size TIMES.
         lv_y += 1.
         APPEND VALUE #( coordinate_x = lv_x
                         coordinate_y = lv_y
@@ -117,14 +135,15 @@ CLASS lcl_grid IMPLEMENTATION.
       CLEAR lv_y.
     ENDDO.
   ENDMETHOD.
-
   METHOD get_nb_of_living_neighbors.
     TRY.
         rv_return += COND #( WHEN mt_grid[ coordinate_x = iv_coordinate_x - 1 coordinate_y = iv_coordinate_y - 1 ]-cell->state(  ) = abap_true THEN 1 ).
         rv_return += COND #( WHEN mt_grid[ coordinate_x = iv_coordinate_x     coordinate_y = iv_coordinate_y - 1 ]-cell->state(  ) = abap_true THEN 1 ).
         rv_return += COND #( WHEN mt_grid[ coordinate_x = iv_coordinate_x + 1 coordinate_y = iv_coordinate_y - 1 ]-cell->state(  ) = abap_true THEN 1 ).
+
         rv_return += COND #( WHEN mt_grid[ coordinate_x = iv_coordinate_x - 1 coordinate_y = iv_coordinate_y  ]-cell->state(  )    = abap_true THEN 1 ).
         rv_return += COND #( WHEN mt_grid[ coordinate_x = iv_coordinate_x + 1 coordinate_y = iv_coordinate_y  ]-cell->state(  )    = abap_true THEN 1 ).
+
         rv_return += COND #( WHEN mt_grid[ coordinate_x = iv_coordinate_x - 1 coordinate_y = iv_coordinate_y + 1 ]-cell->state(  ) = abap_true THEN 1 ).
         rv_return += COND #( WHEN mt_grid[ coordinate_x = iv_coordinate_x     coordinate_y = iv_coordinate_y + 1 ]-cell->state(  ) = abap_true THEN 1 ).
         rv_return += COND #( WHEN mt_grid[ coordinate_x = iv_coordinate_x + 1 coordinate_y = iv_coordinate_y + 1 ]-cell->state(  ) = abap_true THEN 1 ).
@@ -153,6 +172,16 @@ CLASS lcl_grid IMPLEMENTATION.
     rv_result = COND #( WHEN mt_grid[ coordinate_x = iv_x coordinate_y = iv_y ]-cell->state(  ) = abap_true
                          AND get_nb_of_living_neighbors( iv_coordinate_x = iv_x iv_coordinate_y = iv_y ) < 2 THEN abap_true ).
   ENDMETHOD.
+
+  METHOD kill_cell.
+    mt_grid[ coordinate_x = iv_x coordinate_y = iv_y ]-cell->set_dead(  ).
+  ENDMETHOD.
+
+
+  METHOD give_birth_cell.
+    mt_grid[ coordinate_x = iv_x coordinate_y = iv_y ]-cell->set_alive(  ).
+  ENDMETHOD.
+
 ENDCLASS.
 
 CLASS lcl_gol DEFINITION FINAL.
@@ -165,12 +194,12 @@ CLASS lcl_gol DEFINITION FINAL.
       play        IMPORTING iv_iteration TYPE i.
 
   PRIVATE SECTION.
-    DATA:
-         mv_grid_size TYPE i.
-    METHODS:
-         validate RAISING cx_gol_wrong_value,
-         initialize_grid,
-         apply_rules IMPORTING iv_x TYPE i
+    DATA :
+          mv_grid_size TYPE i.
+    METHODS :
+      validate RAISING cx_gol_wrong_value,
+      initialize_grid,
+      apply_rules IMPORTING iv_x TYPE i
                             iv_y TYPE i.
 ENDCLASS.
 
@@ -197,7 +226,9 @@ CLASS lcl_gol IMPLEMENTATION.
         lv_x += 1.
         DO mv_grid_size TIMES.
           lv_y += 1.
+
           apply_rules( iv_x = lv_x iv_y = lv_y ).
+
         ENDDO.
         CLEAR lv_y.
       ENDDO.
@@ -209,14 +240,13 @@ CLASS lcl_gol IMPLEMENTATION.
     IF mo_grid->is_alive_and_less_2_neighbors( iv_y = iv_y  iv_x = iv_x ) OR
        mo_grid->is_alive_and_more_2_neighbors( iv_y = iv_y iv_x = iv_x ) OR
        mo_grid->is_alive_and_2_or_3_neighbors( iv_x = iv_x iv_y = iv_y ).
-      mo_grid->mt_grid[ coordinate_x = iv_x coordinate_y = iv_y ]-cell->set_dead(  ).
+      mo_grid->kill_cell( iv_x = iv_x iv_y = iv_y ).
     ENDIF.
+
     IF mo_grid->is_dead_and_more_2_neighbors( iv_x = iv_x iv_y = iv_y ).
-      mo_grid->mt_grid[ coordinate_x = iv_x coordinate_y = iv_y ]-cell->set_alive(  ).
+      mo_grid->give_birth_cell( iv_x = iv_x iv_y = iv_y ).
     ENDIF.
   ENDMETHOD.
-
-
 
   METHOD validate.
     IF mv_grid_size <= 1.
@@ -224,14 +254,10 @@ CLASS lcl_gol IMPLEMENTATION.
     ENDIF.
   ENDMETHOD.
 
-
   METHOD initialize_grid.
     mo_grid = NEW #( mv_grid_size ).
   ENDMETHOD.
-
 ENDCLASS.
-
-
 
 CLASS ltc_gol DEFINITION FINAL FOR TESTING
   DURATION SHORT
@@ -246,10 +272,13 @@ CLASS ltc_gol DEFINITION FINAL FOR TESTING
       raise_exception_in_validate FOR TESTING RAISING cx_static_check.
 ENDCLASS.
 
-
 CLASS ltc_gol IMPLEMENTATION.
 
   METHOD setup.
+
+  ENDMETHOD.
+
+  METHOD acceptance_test.
 
   ENDMETHOD.
 
@@ -268,9 +297,25 @@ CLASS ltc_gol IMPLEMENTATION.
     cl_abap_unit_assert=>assert_true( exception_catched ).
   ENDMETHOD.
 
-  METHOD acceptance_test.
-*    mo_cut->play( iv_iteration = 3 ).
-*mo_cut->mo_grid->mt_grit
-  ENDMETHOD.
-
 ENDCLASS.
+
+CLASS lcl_application DEFINITION.
+
+  PUBLIC SECTION.
+    METHODS :
+      main IMPORTING iv_grid_size TYPE i
+                     iv_iteration TYPE i.
+ENDCLASS.
+
+CLASS lcl_application IMPLEMENTATION.
+  METHOD main.
+    TRY.
+        DATA(lo_gol) = NEW lcl_gol( iv_grid_size ).
+        lo_gol->play( iv_iteration ).
+      CATCH cx_gol_wrong_value.
+    ENDTRY.
+  ENDMETHOD.
+ENDCLASS.
+
+START-OF-SELECTION.
+  NEW lcl_application( )->main( iv_grid_size = p_gsize iv_iteration = p_iter ).

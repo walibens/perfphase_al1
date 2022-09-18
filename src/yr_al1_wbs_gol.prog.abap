@@ -5,9 +5,6 @@ PARAMETERS :
   p_iter  TYPE i.
 
 CLASS cx_gol_wrong_value DEFINITION INHERITING FROM cx_static_check FINAL.
-  PUBLIC SECTION.
-  PROTECTED SECTION.
-  PRIVATE SECTION.
 ENDCLASS.
 
 CLASS cx_gol_wrong_value IMPLEMENTATION.
@@ -105,7 +102,8 @@ CLASS lcl_grid DEFINITION FINAL.
       kill_cell                    IMPORTING iv_x TYPE i
                                              iv_y TYPE i,
       give_birth_cell IMPORTING iv_x TYPE i
-                                iv_y TYPE i.
+                                iv_y TYPE i,
+      retrieve_grid RETURNING VALUE(rv_return) TYPE string.
   PRIVATE SECTION.
     DATA :
           mv_grid_size TYPE i.
@@ -182,6 +180,16 @@ CLASS lcl_grid IMPLEMENTATION.
     mt_grid[ coordinate_x = iv_x coordinate_y = iv_y ]-cell->set_alive(  ).
   ENDMETHOD.
 
+  METHOD retrieve_grid.
+    LOOP AT mt_grid INTO DATA(ls_grid).
+      rv_return =  rv_return &&
+                   COND #( WHEN ls_grid-cell->state( ) = abap_true
+                           THEN '*'
+                           ELSE '-' ) &&
+                   cl_abap_char_utilities=>cr_lf.
+    ENDLOOP.
+  ENDMETHOD.
+
 ENDCLASS.
 
 CLASS lcl_gol DEFINITION FINAL.
@@ -191,7 +199,9 @@ CLASS lcl_gol DEFINITION FINAL.
     METHODS :
       constructor IMPORTING iv_grid_size TYPE i
                   RAISING   cx_gol_wrong_value,
-      play        IMPORTING iv_iteration TYPE i.
+      play        IMPORTING iv_iteration     TYPE i
+                  RETURNING VALUE(rv_result) TYPE string_table,
+      display_grid.
 
   PRIVATE SECTION.
     DATA :
@@ -236,6 +246,11 @@ CLASS lcl_gol IMPLEMENTATION.
     ENDDO.
   ENDMETHOD.
 
+  METHOD display_grid.
+    cl_demo_output=>display_text( mo_grid->retrieve_grid( ) ).
+
+  ENDMETHOD.
+
   METHOD apply_rules.
     IF mo_grid->is_alive_and_less_2_neighbors( iv_y = iv_y  iv_x = iv_x ) OR
        mo_grid->is_alive_and_more_2_neighbors( iv_y = iv_y iv_x = iv_x ) OR
@@ -264,22 +279,20 @@ CLASS ltc_gol DEFINITION FINAL FOR TESTING
   RISK LEVEL HARMLESS.
 
   PRIVATE SECTION.
-    DATA mo_cut TYPE REF TO lcl_gol.
+    DATA :
+      mo_cut TYPE REF TO lcl_gol.
     METHODS:
-      setup,
       acceptance_test FOR TESTING RAISING cx_dynamic_check,
       grid_is_initialized FOR TESTING RAISING cx_static_check,
       raise_exception_in_validate FOR TESTING RAISING cx_static_check.
 ENDCLASS.
 
 CLASS ltc_gol IMPLEMENTATION.
-
-  METHOD setup.
-
-  ENDMETHOD.
-
   METHOD acceptance_test.
+    mo_cut = NEW #( iv_grid_size = 3 ).
 
+    DATA(lv_grid_exp) = '--*' && cl_abap_char_utilities=>cr_lf && '-**' && cl_abap_char_utilities=>cr_lf && '---' && cl_abap_char_utilities=>cr_lf.
+    cl_abap_unit_assert=>assert_equals( msg = 'msg' exp = lv_grid_exp act = mo_cut->play( iv_iteration = 3 ) ).
   ENDMETHOD.
 
   METHOD grid_is_initialized.
@@ -312,6 +325,7 @@ CLASS lcl_application IMPLEMENTATION.
     TRY.
         DATA(lo_gol) = NEW lcl_gol( iv_grid_size ).
         lo_gol->play( iv_iteration ).
+        lo_gol->display_grid( ).
       CATCH cx_gol_wrong_value.
     ENDTRY.
   ENDMETHOD.

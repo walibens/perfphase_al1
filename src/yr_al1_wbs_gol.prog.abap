@@ -50,9 +50,7 @@ CLASS ltc_cell DEFINITION FINAL FOR TESTING
       is_alive FOR TESTING RAISING cx_static_check.
 ENDCLASS.
 
-
 CLASS ltc_cell IMPLEMENTATION.
-
   METHOD setup.
     mo_cut = NEW #( abap_true ).
   ENDMETHOD.
@@ -66,7 +64,6 @@ CLASS ltc_cell IMPLEMENTATION.
     mo_cut->set_alive( ).
     cl_abap_unit_assert=>assert_equals( exp = abap_true act = mo_cut->state( ) ).
   ENDMETHOD.
-
 ENDCLASS.
 
 CLASS lcl_grid DEFINITION FINAL.
@@ -79,14 +76,31 @@ CLASS lcl_grid DEFINITION FINAL.
       END OF ty_grid.
     DATA :
       mt_grid TYPE STANDARD TABLE OF ty_grid.
-    METHODS :
-      constructor IMPORTING iv_grid_size TYPE i,
-      get_nb_of_living_neighbors IMPORTING iv_coordinate_x  TYPE i
-                                           iv_coordinate_y  TYPE i
-                                 RETURNING VALUE(rv_return) TYPE i.
+
+    METHODS:
+        constructor IMPORTING iv_grid_size TYPE i,
+        get_nb_of_living_neighbors IMPORTING iv_coordinate_x TYPE i
+                                             iv_coordinate_y TYPE i
+                                   RETURNING VALUE(rv_return) TYPE i,
+     is_alive_and_less_2_neighbors     IMPORTING iv_y TYPE i
+     iv_x TYPE i
+     RETURNING VALUE(rv_result) TYPE abap_bool,
+         is_alive_and_more_2_neighbors
+         IMPORTING iv_y TYPE i
+     iv_x TYPE i
+     RETURNING VALUE(rv_result) TYPE abap_bool,
+         is_alive_and_2_or_3_neighbors
+         IMPORTING iv_x TYPE i
+     iv_y TYPE i
+     RETURNING VALUE(rv_result) TYPE abap_bool,
+         is_dead_and_more_2_neighbors
+         IMPORTING iv_x TYPE i
+     iv_y TYPE i
+     RETURNING VALUE(rv_result) TYPE abap_bool.
 ENDCLASS.
 
 CLASS lcl_grid IMPLEMENTATION.
+
   METHOD constructor.
     DATA :
       lv_x TYPE i,
@@ -109,10 +123,8 @@ CLASS lcl_grid IMPLEMENTATION.
         rv_return += COND #( WHEN mt_grid[ coordinate_x = iv_coordinate_x - 1 coordinate_y = iv_coordinate_y - 1 ]-cell->state(  ) = abap_true THEN 1 ).
         rv_return += COND #( WHEN mt_grid[ coordinate_x = iv_coordinate_x     coordinate_y = iv_coordinate_y - 1 ]-cell->state(  ) = abap_true THEN 1 ).
         rv_return += COND #( WHEN mt_grid[ coordinate_x = iv_coordinate_x + 1 coordinate_y = iv_coordinate_y - 1 ]-cell->state(  ) = abap_true THEN 1 ).
-
         rv_return += COND #( WHEN mt_grid[ coordinate_x = iv_coordinate_x - 1 coordinate_y = iv_coordinate_y  ]-cell->state(  )    = abap_true THEN 1 ).
         rv_return += COND #( WHEN mt_grid[ coordinate_x = iv_coordinate_x + 1 coordinate_y = iv_coordinate_y  ]-cell->state(  )    = abap_true THEN 1 ).
-
         rv_return += COND #( WHEN mt_grid[ coordinate_x = iv_coordinate_x - 1 coordinate_y = iv_coordinate_y + 1 ]-cell->state(  ) = abap_true THEN 1 ).
         rv_return += COND #( WHEN mt_grid[ coordinate_x = iv_coordinate_x     coordinate_y = iv_coordinate_y + 1 ]-cell->state(  ) = abap_true THEN 1 ).
         rv_return += COND #( WHEN mt_grid[ coordinate_x = iv_coordinate_x + 1 coordinate_y = iv_coordinate_y + 1 ]-cell->state(  ) = abap_true THEN 1 ).
@@ -120,10 +132,30 @@ CLASS lcl_grid IMPLEMENTATION.
     ENDTRY.
   ENDMETHOD.
 
+  METHOD is_dead_and_more_2_neighbors.
+    rv_result = COND #( WHEN mt_grid[ coordinate_x = iv_x coordinate_y = iv_y ]-cell->state(  )  = abap_false
+                         AND get_nb_of_living_neighbors( iv_coordinate_x = iv_x iv_coordinate_y = iv_y ) = 3 THEN abap_true ).
+
+  ENDMETHOD.
+
+  METHOD is_alive_and_2_or_3_neighbors.
+    rv_result = COND #( WHEN mt_grid[ coordinate_x = iv_x coordinate_y = iv_y ]-cell->state(  )  = abap_true
+                         AND ( get_nb_of_living_neighbors( iv_coordinate_x = iv_x iv_coordinate_y = iv_y ) = 2 OR
+                               get_nb_of_living_neighbors( iv_coordinate_x = iv_x iv_coordinate_y = iv_y ) = 3 ) THEN abap_true ).
+  ENDMETHOD.
+
+  METHOD is_alive_and_more_2_neighbors.
+    rv_result = COND #( WHEN mt_grid[ coordinate_x = iv_x coordinate_y = iv_y ]-cell->state(  )  = abap_true
+                         AND get_nb_of_living_neighbors( iv_coordinate_x = iv_x iv_coordinate_y = iv_y ) > 2 THEN abap_true ).
+  ENDMETHOD.
+
+  METHOD is_alive_and_less_2_neighbors.
+    rv_result = COND #( WHEN mt_grid[ coordinate_x = iv_x coordinate_y = iv_y ]-cell->state(  ) = abap_true
+                         AND get_nb_of_living_neighbors( iv_coordinate_x = iv_x iv_coordinate_y = iv_y ) < 2 THEN abap_true ).
+  ENDMETHOD.
 ENDCLASS.
 
 CLASS lcl_gol DEFINITION FINAL.
-
   PUBLIC SECTION.
     DATA :
       mo_grid TYPE REF TO lcl_grid.
@@ -132,29 +164,14 @@ CLASS lcl_gol DEFINITION FINAL.
                   RAISING   cx_gol_wrong_value,
       play        IMPORTING iv_iteration TYPE i.
 
-  PROTECTED SECTION.
-
   PRIVATE SECTION.
-    DATA mv_grid_size TYPE i.
-    METHODS validate RAISING cx_gol_wrong_value.
-    METHODS initialize_grid.
-    METHODS is_alive_and_less_2_neighbors
-      IMPORTING iv_y             TYPE i
-                iv_x             TYPE i
-      RETURNING VALUE(rv_result) TYPE abap_bool.
-    METHODS is_alive_and_more_2_neighbors
-      IMPORTING iv_y             TYPE i
-                iv_x             TYPE i
-      RETURNING VALUE(rv_result) TYPE abap_bool.
-    METHODS is_alive_and_2_3_neighbors
-      IMPORTING iv_x             TYPE i
-                iv_y             TYPE i
-      RETURNING VALUE(rv_result) TYPE abap_bool.
-    METHODS is_dead_and_more_2_neighbors
-      IMPORTING iv_x             TYPE i
-                iv_y             TYPE i
-      RETURNING VALUE(rv_result) TYPE abap_bool.
-
+    DATA:
+         mv_grid_size TYPE i.
+    METHODS:
+         validate RAISING cx_gol_wrong_value,
+         initialize_grid,
+         apply_rules IMPORTING iv_x TYPE i
+                            iv_y TYPE i.
 ENDCLASS.
 
 CLASS lcl_gol IMPLEMENTATION.
@@ -180,15 +197,7 @@ CLASS lcl_gol IMPLEMENTATION.
         lv_x += 1.
         DO mv_grid_size TIMES.
           lv_y += 1.
-
-          IF is_alive_and_less_2_neighbors( iv_y = lv_y  iv_x = lv_x ) OR
-             is_alive_and_more_2_neighbors( iv_y = lv_y iv_x = lv_x ) OR
-             is_alive_and_2_3_neighbors( iv_x = lv_x iv_y = lv_y ).
-            mo_grid->mt_grid[ coordinate_x = lv_x coordinate_y = lv_y ]-cell->set_dead(  ).
-          ENDIF.
-          IF is_dead_and_more_2_neighbors( iv_x = lv_x iv_y = lv_y ).
-            mo_grid->mt_grid[ coordinate_x = lv_x coordinate_y = lv_y ]-cell->set_alive(  ).
-          ENDIF.
+          apply_rules( iv_x = lv_x iv_y = lv_y ).
         ENDDO.
         CLEAR lv_y.
       ENDDO.
@@ -196,27 +205,18 @@ CLASS lcl_gol IMPLEMENTATION.
     ENDDO.
   ENDMETHOD.
 
-  METHOD is_dead_and_more_2_neighbors.
-    rv_result = COND #( WHEN mo_grid->mt_grid[ coordinate_x = iv_x coordinate_y = iv_y ]-cell->state(  )  = abap_false
-                         AND mo_grid->get_nb_of_living_neighbors( iv_coordinate_x = iv_x iv_coordinate_y = iv_y ) = 3 THEN abap_true ).
-
+  METHOD apply_rules.
+    IF mo_grid->is_alive_and_less_2_neighbors( iv_y = iv_y  iv_x = iv_x ) OR
+       mo_grid->is_alive_and_more_2_neighbors( iv_y = iv_y iv_x = iv_x ) OR
+       mo_grid->is_alive_and_2_or_3_neighbors( iv_x = iv_x iv_y = iv_y ).
+      mo_grid->mt_grid[ coordinate_x = iv_x coordinate_y = iv_y ]-cell->set_dead(  ).
+    ENDIF.
+    IF mo_grid->is_dead_and_more_2_neighbors( iv_x = iv_x iv_y = iv_y ).
+      mo_grid->mt_grid[ coordinate_x = iv_x coordinate_y = iv_y ]-cell->set_alive(  ).
+    ENDIF.
   ENDMETHOD.
 
-  METHOD is_alive_and_2_3_neighbors.
-    rv_result = COND #( WHEN mo_grid->mt_grid[ coordinate_x = iv_x coordinate_y = iv_y ]-cell->state(  )  = abap_true
-                         AND ( mo_grid->get_nb_of_living_neighbors( iv_coordinate_x = iv_x iv_coordinate_y = iv_y ) = 2 OR
-                               mo_grid->get_nb_of_living_neighbors( iv_coordinate_x = iv_x iv_coordinate_y = iv_y ) = 3 ) THEN abap_true ).
-  ENDMETHOD.
 
-  METHOD is_alive_and_more_2_neighbors.
-    rv_result = COND #( WHEN mo_grid->mt_grid[ coordinate_x = iv_x coordinate_y = iv_y ]-cell->state(  )  = abap_true
-                         AND mo_grid->get_nb_of_living_neighbors( iv_coordinate_x = iv_x iv_coordinate_y = iv_y ) > 2 THEN abap_true ).
-  ENDMETHOD.
-
-  METHOD is_alive_and_less_2_neighbors.
-    rv_result = COND #( WHEN mo_grid->mt_grid[ coordinate_x = iv_x coordinate_y = iv_y ]-cell->state(  ) = abap_true
-                         AND mo_grid->get_nb_of_living_neighbors( iv_coordinate_x = iv_x iv_coordinate_y = iv_y ) < 2 THEN abap_true ).
-  ENDMETHOD.
 
   METHOD validate.
     IF mv_grid_size <= 1.
@@ -228,23 +228,28 @@ CLASS lcl_gol IMPLEMENTATION.
   METHOD initialize_grid.
     mo_grid = NEW #( mv_grid_size ).
   ENDMETHOD.
+
 ENDCLASS.
+
+
 
 CLASS ltc_gol DEFINITION FINAL FOR TESTING
   DURATION SHORT
   RISK LEVEL HARMLESS.
 
   PRIVATE SECTION.
-    DATA:
-      mo_cut TYPE REF TO lcl_gol.
+    DATA mo_cut TYPE REF TO lcl_gol.
     METHODS:
+      setup,
       acceptance_test FOR TESTING RAISING cx_dynamic_check,
       grid_is_initialized FOR TESTING RAISING cx_static_check,
       raise_exception_in_validate FOR TESTING RAISING cx_static_check.
 ENDCLASS.
 
+
 CLASS ltc_gol IMPLEMENTATION.
-  METHOD acceptance_test.
+
+  METHOD setup.
 
   ENDMETHOD.
 
@@ -262,4 +267,10 @@ CLASS ltc_gol IMPLEMENTATION.
 
     cl_abap_unit_assert=>assert_true( exception_catched ).
   ENDMETHOD.
+
+  METHOD acceptance_test.
+*    mo_cut->play( iv_iteration = 3 ).
+*mo_cut->mo_grid->mt_grit
+  ENDMETHOD.
+
 ENDCLASS.
